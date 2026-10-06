@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type * as AT from '@coderline/alphatab';
 import { getTrackInfos, loadDemoScore, loadGpFile, type TrackInfo } from './core/loader';
-import { renderStrip, type StripResult } from './core/strip';
+import { renderStrip, type StripResult, type NotationMode } from './core/strip';
 import { resolveTheme, type ThemeMode } from './core/themes';
 import { Engine } from './core/engine';
 import {
@@ -62,11 +62,12 @@ export default function App() {
   const [zoomPct, setZoomPct] = useState(100);
   const [anchorPct, setAnchorPct] = useState(49);
   const [vertPct, setVertPct] = useState(50);
+  const [notationMode, setNotationMode] = useState<NotationMode>('jianpu');
   const [themeMode, setThemeMode] = useState<ThemeMode>('light');
   const [fgColor, setFgColor] = useState('#ffffff');
+  const [bgColor, setBgColor] = useState<string | null>(null);
   const [opacity, setOpacity] = useState(100);
   const [bgOpacity, setBgOpacity] = useState(100);
-  const [showJianpu, setShowJianpu] = useState(true);
 
   // ---- 导出参数 ----
   const [exportOpen, setExportOpen] = useState(false);
@@ -105,8 +106,10 @@ export default function App() {
   const transparent = themeMode === 'transparent';
   const alphaMimes = useMemo(() => mimes.filter((m) => m.alpha), [mimes]);
   const opaqueMimes = useMemo(() => mimes.filter((m) => !m.alpha), [mimes]);
-  /** 需要 Alpha 通道：透明主题，或半透明背景且未烧录不透明视频 */
-  const needsAlpha = transparent || (bgOpacity < 100 && !(hasVideo && burnVideo));
+  /** 是否存在可见背景：白/黑主题固定有；透明主题取决于是否选了背景色 */
+  const hasBg = themeMode !== 'transparent' || !!bgColor;
+  /** 需要 Alpha 通道导出：无背景 / 半透明背景（且未烧录不透明视频） */
+  const needsAlpha = !hasBg || (bgOpacity < 100 && !(hasVideo && burnVideo));
 
   // ---- 谱面条带（alphaTab 渲染） ----
   const [strip, setStrip] = useState<StripResult | null>(null);
@@ -122,6 +125,7 @@ export default function App() {
     H,
     themeMode,
     fgColor,
+    bgColor,
     opacity,
     bgOpacity,
     anchorPct,
@@ -130,7 +134,7 @@ export default function App() {
     hasVideo,
     burnVideo,
   });
-  liveRef.current = { W, H, themeMode, fgColor, opacity, bgOpacity, anchorPct, vertPct, offsetMs, hasVideo, burnVideo };
+  liveRef.current = { W, H, themeMode, fgColor, bgColor, opacity, bgOpacity, anchorPct, vertPct, offsetMs, hasVideo, burnVideo };
 
   // 预览静音状态的即时镜像（供事件回调读取，避免闭包过期）
   const monitorMutedRef = useRef(false);
@@ -142,8 +146,8 @@ export default function App() {
     const L = liveRef.current;
     const st = stripRef.current;
     ctx.clearRect(0, 0, w, h);
-    const theme = resolveTheme(L.themeMode, L.fgColor);
-    // 不透明背景：作为画布底色（有视频时会被视频覆盖，保持原有行为）
+    const theme = resolveTheme(L.themeMode, L.fgColor, L.bgColor);
+    // 背景：100% 时铺满整帧；半透明时只作为谱面条带的衬底（叠在视频上）
     if (theme.bg && L.bgOpacity >= 100) {
       ctx.fillStyle = theme.bg;
       ctx.fillRect(0, 0, w, h);
@@ -238,6 +242,10 @@ export default function App() {
 
   // ---- 谱面条带渲染 ----
   const stripFg = themeMode === 'light' ? null : themeMode === 'dark' ? '#f2f4f7' : fgColor;
+  // 钢琴大谱表 / 鼓轨固定五线谱
+  const selInfo = trackInfos.find((t) => t.index === selectedTrack);
+  const notationLocked = !!selInfo && (selInfo.isPerc || selInfo.grandStaff);
+  const effectiveNotationMode: NotationMode = notationLocked ? 'standard' : notationMode;
   useEffect(() => {
     if (!score) {
       setStrip(null);
@@ -245,7 +253,7 @@ export default function App() {
     }
     let cancelled = false;
     setRendering(true);
-    renderStrip(score, { scale: zoomPct / 100, trackIndexes: [selectedTrack], jianpu: showJianpu, fg: stripFg })
+    renderStrip(score, { scale: zoomPct / 100, trackIndexes: [selectedTrack], notationMode: effectiveNotationMode, fg: stripFg })
       .then((r) => {
         if (!cancelled) setStrip(r);
       })
@@ -262,7 +270,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [score, selectedTrack, zoomPct, showJianpu, stripFg]);
+  }, [score, selectedTrack, zoomPct, effectiveNotationMode, stripFg]);
 
   // ---- 播放状态同步 ----
   useEffect(() => {
@@ -729,12 +737,33 @@ export default function App() {
                   </button>
                 </div>
                 {transparent && (
-                  <div className="row" style={{ marginTop: 10 }}>
-                    <span style={{ fontSize: 12.5, color: 'var(--muted)' }}>谱面颜色</span>
-                    <input type="color" value={fgColor} onChange={(e) => setFgColor(e.target.value)} />
-                    <button className="btn small" onClick={() => setFgColor('#ffffff')}>白</button>
-                    <button className="btn small" onClick={() => setFgColor('#17191d')}>黑</button>
-                  </div>
+                  <>
+                    <div className="row" style={{ marginTop: 10 }}>
+                      <span style={{ fontSize: 12.5, color: 'var(--muted)' }}>谱面颜色</span>
+                      <input type="color" value={fgColor} onChange={(e) => setFgColor(e.target.value)} />
+                      <button className="btn small" onClick={() => setFgColor('#ffffff')}>白</button>
+                      <button className="btn small" onClick={() => setFgColor('#17191d')}>黑</button>
+                      <button className="btn small" onClick={() => setFgColor('#4d6bfe')}>蓝</button>
+                      <button className="btn small" onClick={() => setFgColor('#ffb020')}>黄</button>
+                    </div>
+                    <div className="row" style={{ marginTop: 8 }}>
+                      <span style={{ fontSize: 12.5, color: 'var(--muted)' }}>背景颜色</span>
+                      <input type="color" value={bgColor ?? '#10131a'} onChange={(e) => setBgColor(e.target.value)} />
+                      <button
+                        className="btn small"
+                        onClick={() => setBgColor(null)}
+                        title="无背景：导出完全透明的视频"
+                      >
+                        无背景
+                      </button>
+                    </div>
+                    {bgColor && (
+                      <label className="field" style={{ marginTop: 8 }}>
+                        背景不透明度 <span className="val">{bgOpacity}%</span>
+                        <input type="range" min={0} max={100} step={5} value={bgOpacity} onChange={(e) => setBgOpacity(parseInt(e.target.value, 10))} />
+                      </label>
+                    )}
+                  </>
                 )}
                 {!transparent && (
                   <label className="field" style={{ marginTop: 10 }}>
@@ -746,10 +775,34 @@ export default function App() {
                   谱面不透明度 <span className="val">{opacity}%</span>
                   <input type="range" min={20} max={100} step={5} value={opacity} onChange={(e) => setOpacity(parseInt(e.target.value, 10))} />
                 </label>
-                <label className="check-row">
-                  <input type="checkbox" checked={showJianpu} onChange={(e) => setShowJianpu(e.target.checked)} />
-                  简谱行（否则显示五线谱）
+                <label className="field" style={{ marginTop: 10 }}>
+                  记谱方式
+                  <div className="seg" style={{ marginTop: 6 }}>
+                    <button
+                      disabled={notationLocked}
+                      className={effectiveNotationMode === 'jianpu' ? 'on' : ''}
+                      onClick={() => setNotationMode('jianpu')}
+                    >
+                      简谱
+                    </button>
+                    <button
+                      disabled={notationLocked}
+                      className={effectiveNotationMode === 'standard' ? 'on' : ''}
+                      onClick={() => setNotationMode('standard')}
+                    >
+                      五线谱
+                    </button>
+                    <button
+                      disabled={notationLocked}
+                      className={effectiveNotationMode === 'tab' ? 'on' : ''}
+                      onClick={() => setNotationMode('tab')}
+                    >
+                      六线谱
+                    </button>
+                  </div>
                 </label>
+                {selInfo?.grandStaff && <div className="hint">钢琴为左右手大谱表（高音谱 + 低音谱），固定五线谱记谱。</div>}
+                {selInfo?.isPerc && <div className="hint">架子鼓使用标准鼓谱记谱（五线谱 + 鼓件符头）。</div>}
                 {needsAlpha && <div className="hint">透明 / 半透明背景导出为带 Alpha 通道的 WebM（VP8），需使用 Chrome / Edge 浏览器。</div>}
               </div>
             </div>

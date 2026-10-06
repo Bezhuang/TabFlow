@@ -25,7 +25,12 @@ function hexToRgba(hex: string, alpha: number): string {
   return `rgba(${r},${g},${b},${alpha})`;
 }
 
-export function resolveTheme(mode: ThemeMode, foreground: string): ThemeColors {
+export function resolveTheme(
+  mode: ThemeMode,
+  foreground: string,
+  /** 透明主题下的背景色（null = 无背景，纯透明） */
+  bgColor: string | null = null,
+): ThemeColors {
   if (mode === 'light') {
     return {
       bg: '#ffffff',
@@ -59,7 +64,7 @@ export function resolveTheme(mode: ThemeMode, foreground: string): ThemeColors {
     };
   }
   return {
-    bg: null,
+    bg: bgColor,
     strings: hexToRgba(foreground, 0.55),
     frets: foreground,
     bars: hexToRgba(foreground, 0.8),

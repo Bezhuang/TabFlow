@@ -5,6 +5,8 @@ export interface TrackInfo {
   index: number;
   name: string;
   isPerc: boolean;
+  /** 钢琴类大谱表（多谱表且无六线谱）：固定五线谱渲染 */
+  grandStaff: boolean;
   noteCount: number;
 }
 
@@ -14,10 +16,12 @@ function trackInfo(track: AT.model.Track): TrackInfo {
   for (const bar of staff?.bars ?? []) {
     for (const v of bar.voices) for (const b of v.beats) noteCount += b.notes.length;
   }
+  const isPerc = track.isPercussion || staff?.isPercussion === true;
   return {
     index: track.index,
     name: track.name || `Track ${track.index + 1}`,
-    isPerc: track.isPercussion || staff?.isPercussion === true,
+    isPerc,
+    grandStaff: !isPerc && track.staves.length > 1 && !track.staves.some((s) => s.showTablature),
     noteCount,
   };
 }

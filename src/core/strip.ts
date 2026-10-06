@@ -37,10 +37,13 @@ interface BoundsLookupLike {
   staffSystems: StaffSystemBoundsLike[];
 }
 
+export type NotationMode = 'jianpu' | 'standard' | 'tab';
+
 export interface StripOptions {
   scale: number;
   trackIndexes: number[];
-  jianpu: boolean;
+  /** 记谱方式：简谱 / 五线谱 / 六线谱（钢琴大谱表与鼓轨固定五线谱） */
+  notationMode: NotationMode;
   /** 谱面前景色（hex），null = alphaTab 默认黑 */
   fg: string | null;
 }
@@ -179,19 +182,36 @@ export async function renderStrip(score: model.Score, opts: StripOptions): Promi
   patchHtml5CanvasColor();
   const familyName = await ensureMusicFont();
 
-  // 简谱 / 标准谱切换（修改 staff 显示标记）
+  // 记谱方式（直接改 staff 显示标记）
+  // - 鼓轨：固定标准鼓谱（五线谱记谱，绝不能切成简谱，否则渲染错误）
+  // - 钢琴大谱表（多谱表且无六线谱）：固定五线谱
+  // - 单谱表弦乐器：按 简谱 / 五线谱 / 六线谱 切换
   for (const ti of opts.trackIndexes) {
     const track = score.tracks[ti];
-    if (!track || track.isPercussion) continue;
-    const multiStaff = track.staves.length > 1;
+    if (!track) continue;
+    const grandStaff = track.staves.length > 1 && !track.staves.some((s) => s.showTablature);
     for (const staff of track.staves) {
-      if (multiStaff) {
-        // 多谱表（如钢琴大谱表）：左右手都用五线谱
+      if (track.isPercussion || staff.isPercussion || grandStaff) {
         staff.showNumbered = false;
         staff.showStandardNotation = true;
+        staff.showTablature = false;
+      } else if (track.staves.length > 1) {
+        // 多谱表弦乐器（如 GP5 的 标准谱+六线谱 双谱表）
+        if (staff.index === 0) {
+          staff.showNumbered = opts.notationMode === 'jianpu';
+          staff.showStandardNotation = opts.notationMode === 'standard';
+          staff.showTablature = opts.notationMode === 'tab';
+        } else {
+          // 第二谱表是六线谱：六线谱模式下隐藏，避免重复
+          staff.showNumbered = false;
+          staff.showStandardNotation = false;
+          staff.showTablature = opts.notationMode !== 'tab';
+        }
       } else {
-        staff.showNumbered = opts.jianpu;
-        staff.showStandardNotation = !opts.jianpu;
+        // 单谱表：简谱/五线谱模式下六线谱行仍保留（GP 风格），六线谱模式只留六线谱
+        staff.showNumbered = opts.notationMode === 'jianpu';
+        staff.showStandardNotation = opts.notationMode === 'standard';
+        staff.showTablature = true;
       }
     }
   }
