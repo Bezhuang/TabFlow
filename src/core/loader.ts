@@ -42,6 +42,15 @@ export async function loadGpFile(file: File): Promise<AT.model.Score> {
     const detail = diag?.parserDiagnostics?.items?.map((d) => d.message).join('; ');
     throw new Error(detail || '无法解析该文件，请确认是 Guitar Pro 格式（.gp3 / .gp4 / .gp5 / .gpx / .gp）');
   }
+  const clamped = hideOutOfRangePercussionNotes(score);
+  if (clamped) {
+    // 隐藏越界鼓音符后刷新派生数据（minNote/maxNote 等），保持一致
+    try {
+      score.finish(new Settings());
+    } catch {
+      /* 失败时保持既有派生数据 */
+    }
+  }
   ensureFinished(score);
   return score;
 }
@@ -51,6 +60,87 @@ function ensureFinished(score: AT.model.Score): void {
   if (b0 && b0.playbackStart === undefined) {
     score.finish(new Settings());
   }
+}
+
+// ---------------------------------------------------------------------------
+// 鼓谱溢出保护
+// staffLine 语义：0 = 五线谱最上线，每 +1 向下半格（线/间交替）。
+// 上加一线 = -2，下加一线 = 10。超出该范围的鼓音符会画出延伸很远的加线
+// （部分 GP6+ 文件的鼓表映射越界），按需求"不改渲染逻辑，越界不显示"。
+// ---------------------------------------------------------------------------
+const PERC_STAFF_LINE_MIN = -2;
+const PERC_STAFF_LINE_MAX = 10;
+
+/** 内置默认鼓表的 id → staffLine 映射（供 GP5 等仅有 GM 编号、无自带鼓表的文件兜底）。 */
+let defaultPercStaffLines: Map<number, number> | null = null;
+function getDefaultPercussionStaffLines(): Map<number, number> {
+  if (!defaultPercStaffLines) {
+    defaultPercStaffLines = new Map();
+    try {
+      const tex = [
+        '\\tempo 100',
+        '.',
+        '\\track "P"',
+        '\\instrument percussion',
+        '\\articulation defaults',
+        ':4',
+        'kickhit2 snarehit hihatclosed lowtomhit |',
+      ].join('\n');
+      const tmp = importer.ScoreLoader.loadAlphaTex(tex);
+      for (const a of tmp.tracks[0]?.percussionArticulations ?? []) {
+        if (a && typeof a.id === 'number' && typeof a.staffLine === 'number' && !defaultPercStaffLines.has(a.id)) {
+          defaultPercStaffLines.set(a.id, a.staffLine);
+        }
+      }
+    } catch {
+      /* 提取失败时兜底表为空（仅影响无法解析的音符判定） */
+    }
+  }
+  return defaultPercStaffLines;
+}
+
+/** 解析鼓音符的实际渲染行（与 alphaTab 内部规则一致：先查轨道鼓表，再查内置默认表）。 */
+function resolvePercussionStaffLine(track: AT.model.Track, articulationId: number): number | undefined {
+  const table = track.percussionArticulations;
+  if (table && articulationId >= 0 && articulationId < table.length) {
+    const art = table[articulationId];
+    if (art && typeof art.staffLine === 'number') return art.staffLine;
+  }
+  if (articulationId >= 0) {
+    const line = getDefaultPercussionStaffLines().get(articulationId);
+    if (typeof line === 'number') return line;
+  }
+  return undefined;
+}
+
+/** 移除超出"上加一线 ~ 下加一线"的鼓音符（不改动任何位置/映射，仅不显示），返回是否有改动。 */
+function hideOutOfRangePercussionNotes(score: AT.model.Score): boolean {
+  let changed = false;
+  for (const track of score.tracks) {
+    if (!track.isPercussion) continue;
+    for (const staff of track.staves) {
+      for (const bar of staff.bars) {
+        for (const voice of bar.voices) {
+          for (const beat of voice.beats) {
+            if (beat.notes.length === 0) continue;
+            const kept: AT.model.Note[] = [];
+            for (const note of beat.notes) {
+              const line = resolvePercussionStaffLine(track, note.percussionArticulation);
+              if (typeof line === 'number' && line >= PERC_STAFF_LINE_MIN && line <= PERC_STAFF_LINE_MAX) {
+                kept.push(note);
+              } else {
+                changed = true;
+              }
+            }
+            if (kept.length !== beat.notes.length) {
+              beat.notes.splice(0, beat.notes.length, ...kept);
+            }
+          }
+        }
+      }
+    }
+  }
+  return changed;
 }
 
 /** 内置示例曲，无需上传文件即可体验完整流程。 */

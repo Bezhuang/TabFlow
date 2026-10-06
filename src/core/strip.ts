@@ -173,6 +173,69 @@ function renderOnce(score: model.Score, trackIndexes: number[], settings: Settin
   });
 }
 
+let numberedPatchDone = false;
+/**
+ * 修复 alphaTab 简谱渲染器（NumberedBarRenderer）的上游缺陷：
+ * 其 shouldPaintBeamingHelper 恒返回 true，使"纯休止符符杠组"
+ * （如 16 分休止符恰好落在符杠分组边界而独立成组）进入需要读取音符的
+ * 溢出计算分支；这类组没有音符（highestNoteInHelper === null）→ 渲染崩溃
+ * （Cannot read properties of null (reading 'beat')）。
+ * 这里在计算前剔除无音符的符杠组，效果等同标准谱渲染器
+ * （shouldPaintBeamingHelper 返回 !isRestBeamHelper）的行为。
+ */
+function patchNumberedRenderer(): void {
+  if (numberedPatchDone) return;
+  numberedPatchDone = true;
+  try {
+    interface FactoryLike {
+      staffId: string;
+      create(renderer: unknown, bar: unknown): unknown;
+    }
+    const factories = (Environment as unknown as { defaultRenderers?: FactoryLike[] }).defaultRenderers;
+    const factory = factories?.find((f) => f.staffId === 'numbered');
+    if (!factory) return;
+    const origCreate = factory.create.bind(factory);
+    factory.create = (renderer: unknown, bar: unknown) => {
+      const inst = origCreate(renderer, bar) as {
+        calculateBeamingOverflows?: (top: number, bottom: number) => void;
+        helpers?: { beamHelpers?: unknown[][] };
+      };
+      const origCalc = inst.calculateBeamingOverflows;
+      if (typeof origCalc === 'function') {
+        inst.calculateBeamingOverflows = function (this: typeof inst, top: number, bottom: number) {
+          pruneNoteLessBeamHelpers(this.helpers?.beamHelpers);
+          return origCalc.call(this, top, bottom);
+        };
+      }
+      return inst;
+    };
+  } catch {
+    /* 补丁失败时保持默认行为（个别文件可能复现上游缺陷） */
+  }
+}
+
+/** 剔除没有任何音符的符杠组（含 tuplet 的休止组保留：上游对其有安全分支）。 */
+function pruneNoteLessBeamHelpers(beamHelpers: unknown[][] | undefined): void {
+  if (!beamHelpers) return;
+  try {
+    for (const list of beamHelpers) {
+      if (!Array.isArray(list)) continue;
+      for (let i = list.length - 1; i >= 0; i--) {
+        const h = list[i] as {
+          highestNoteInHelper?: unknown;
+          lowestNoteInHelper?: unknown;
+          hasTuplet?: boolean;
+          isRestBeamHelper?: boolean;
+        };
+        const hasNotes = !!(h?.highestNoteInHelper || h?.lowestNoteInHelper);
+        if (!hasNotes && !(h?.hasTuplet && h?.isRestBeamHelper)) list.splice(i, 1);
+      }
+    }
+  } catch {
+    /* 结构不符时跳过 */
+  }
+}
+
 /**
  * 使用 alphaTab 渲染引擎把谱面渲染为一条横向长条（Horizontal 布局），
  * 并根据 boundsLookup 建立 时间 ↔ x 坐标 映射用于滚动同步。
@@ -180,6 +243,7 @@ function renderOnce(score: model.Score, trackIndexes: number[], settings: Settin
  */
 export async function renderStrip(score: model.Score, opts: StripOptions): Promise<StripResult> {
   patchHtml5CanvasColor();
+  patchNumberedRenderer();
   const familyName = await ensureMusicFont();
 
   // 记谱方式（直接改 staff 显示标记）
