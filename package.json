@@ -4,6 +4,12 @@
   "version": "1.0.0",
   "description": "把 Guitar Pro 乐谱变成一行滚动的动态谱视频，可与演奏视频同步，支持白色/透明背景导出",
   "license": "MPL-2.0",
+  "author": "Bezhuang (https://github.com/Bezhuang)",
+  "homepage": "https://bezhuang.github.io/tabflow/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Bezhuang/tabflow.git"
+  },
   "type": "module",
   "scripts": {
     "dev": "vite",

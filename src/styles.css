@@ -145,6 +145,38 @@ button {
   border-radius: 8px;
 }
 
+/* 顶栏图标按钮（GitHub 等） */
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 10px;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.icon-btn:hover {
+  color: var(--navy);
+}
+
+/* 版权行 */
+.copyright {
+  margin-top: 16px;
+  text-align: center;
+  font-size: 11.5px;
+  color: var(--muted);
+  line-height: 1.7;
+}
+
+.copyright a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.copyright a:hover {
+  text-decoration: underline;
+}
+
 /* ---------- 主体 ---------- */
 .main {
   flex: 1;

@@ -1,0 +1,27 @@
+# TabFlow
+
+> TabFlow 是一个纯前端在线工具：把 Guitar Pro 乐谱（.gp3 / .gp4 / .gp5 / .gpx / .gp）转换成一行横向滚动的"动态谱"视频，可与演奏视频对齐同步，并导出白色、黑色或透明背景（Alpha 通道 WebM）的视频，直接叠加到演奏画面上。
+
+- 在线使用（无需安装、无需注册，所有处理都在浏览器本地完成，乐谱与视频不会上传到任何服务器）：https://bezhuang.github.io/tabflow/
+- 开源仓库（MPL-2.0）：https://github.com/Bezhuang/tabflow
+- 作者：Bezhuang
+- 版权：© 2026 Bezhuang
+- 开源协议：Mozilla Public License 2.0（MPL-2.0），谱面解析与渲染基于 alphaTab（https://github.com/CoderLine/alphaTab）
+
+## 核心功能
+
+- Guitar Pro 3–8 乐谱解析与渲染：简谱、五线谱、六线谱；钢琴左右手大谱表；架子鼓标准鼓谱
+- 横向滚动动态谱：播放头锁定、当前小节高亮，滚动节奏与乐曲速度一致
+- 与演奏视频同步：导入演奏视频作为主时钟，支持毫秒级偏移微调
+- 视频导出：自定义输出尺寸（16:9 / 9:16 / 1:1 / 自定义）、缩放、垂直位置、背景与谱面颜色、不透明度；支持烧录演奏视频与声音
+- 内置示例曲（吉他 / 贝斯 / 钢琴 / 架子鼓四轨），打开网页即可体验
+
+## 适用场景
+
+- 吉他 / 贝斯 / 鼓翻弹视频：在演奏画面上叠加同步滚动的乐谱
+- 教学视频：用高亮的滚动谱展示每个音的弹法
+- 短视频制作：导出竖屏 9:16 谱面视频或透明图层用于后期合成
+
+## 技术栈
+
+React + TypeScript + Vite，静态站点，可部署到 GitHub Pages / Vercel 等任意静态托管。乐谱解析与排版渲染由 alphaTab 提供（MPL-2.0），音乐符号使用 Bravura 字体；视频导出使用 Canvas 合成 + MediaRecorder 实时录制。
