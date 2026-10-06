@@ -1,4 +1,4 @@
-# TabFlow — https://bezhuang.github.io/tabflow/
+# TabFlow — https://tabflow.bezhuang.cn/
 # 允许所有搜索引擎与 AI 爬虫抓取（本页为纯前端工具，无私有内容）
 
 User-agent: *
@@ -59,4 +59,4 @@ Allow: /
 User-agent: DuckAssistBot
 Allow: /
 
-Sitemap: https://bezhuang.github.io/tabflow/sitemap.xml
+Sitemap: https://tabflow.bezhuang.cn/sitemap.xml

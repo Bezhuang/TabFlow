@@ -2,7 +2,7 @@
 
 > TabFlow 是一个纯前端在线工具：把 Guitar Pro 乐谱（.gp3 / .gp4 / .gp5 / .gpx / .gp）转换成一行横向滚动的"动态谱"视频，可与演奏视频对齐同步，并导出白色、黑色或透明背景（Alpha 通道 WebM）的视频，直接叠加到演奏画面上。
 
-- 在线使用（无需安装、无需注册，所有处理都在浏览器本地完成，乐谱与视频不会上传到任何服务器）：https://bezhuang.github.io/tabflow/
+- 在线使用（无需安装、无需注册，所有处理都在浏览器本地完成，乐谱与视频不会上传到任何服务器）：https://tabflow.bezhuang.cn/
 - 开源仓库（MPL-2.0）：https://github.com/Bezhuang/tabflow
 - 作者：Bezhuang
 - 版权：© 2026 Bezhuang
