@@ -1,5 +1,6 @@
 import { importer, Settings } from '@coderline/alphatab';
 import type * as AT from '@coderline/alphatab';
+import { t } from '../i18n/translate';
 
 export interface TrackInfo {
   index: number;
@@ -40,7 +41,7 @@ export async function loadGpFile(file: File): Promise<AT.model.Score> {
   } catch (err) {
     const diag = (err as { cause?: { parserDiagnostics?: { items?: { message: string }[] } } }).cause;
     const detail = diag?.parserDiagnostics?.items?.map((d) => d.message).join('; ');
-    throw new Error(detail || '无法解析该文件，请确认是 Guitar Pro 格式（.gp3 / .gp4 / .gp5 / .gpx / .gp）');
+    throw new Error(detail || t('err.parseGp'));
   }
   const clamped = hideOutOfRangePercussionNotes(score);
   if (clamped) {
@@ -143,17 +144,22 @@ function hideOutOfRangePercussionNotes(score: AT.model.Score): boolean {
   return changed;
 }
 
+/** alphaTex 字符串字面量：转义双引号，避免本地化文案里的引号破坏谱面语法。 */
+function texStr(s: string): string {
+  return s.replace(/"/g, "'");
+}
+
 /** 内置示例曲，无需上传文件即可体验完整流程。 */
 export function loadDemoScore(): AT.model.Score {
   // 架子鼓基础节奏型（8 分音符：底鼓 1/3 拍、军鼓 2/4 拍、闭合踩镲铺满）
   const drumA =
     '(kickhit2 hihatclosed) hihatclosed (snarehit hihatclosed) hihatclosed (kickhit2 hihatclosed) hihatclosed (snarehit hihatclosed) hihatclosed |';
   const tex = [
-    '\\title "示例曲 · Am 五声音阶练习"',
-    '\\artist "TabFlow Demo"',
+    `\\title "${texStr(t('demo.title'))}"`,
+    `\\artist "${texStr(t('demo.artist'))}"`,
     '\\tempo 96',
     '.',
-    '\\track "吉他"',
+    `\\track "${texStr(t('demo.trackGuitar'))}"`,
     '\\tuning E3 A3 D4 G4 B3 E4',
     ':8',
     '0.1 3.1 5.1 7.1 5.1 3.1 0.1 3.1 |',
@@ -176,7 +182,7 @@ export function loadDemoScore(): AT.model.Score {
     '8.4 7.4 5.4 3.4 |',
     '0.5 r 0.5 3.5 |',
     '5.4 r 0.1 r |',
-    '\\track "贝斯"',
+    `\\track "${texStr(t('demo.trackBass'))}"`,
     '\\tuning E1 A1 D2 G2',
     ':8',
     '0.4 0.4 0.4 0.4 0.4 0.4 3.4 3.4 |',
@@ -198,7 +204,7 @@ export function loadDemoScore(): AT.model.Score {
     '3.4 3.4 0.4 0.4 |',
     '0.4 r 0.4 0.3 |',
     '0.4 r 0.4 r |',
-    '\\track "钢琴"',
+    `\\track "${texStr(t('demo.trackPiano'))}"`,
     '\\tuning piano',
     '\\clef G2',
     ':2',
@@ -241,7 +247,7 @@ export function loadDemoScore(): AT.model.Score {
     'C3 G3 C3 G3 |',
     'D3 A3 D3 A3 |',
     'E3 B3 A3 E3 |',
-    '\\track "架子鼓"',
+    `\\track "${texStr(t('demo.trackDrums'))}"`,
     '\\instrument percussion',
     '\\articulation defaults',
     ':8',

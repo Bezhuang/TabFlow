@@ -1,6 +1,6 @@
 # TabFlow
 
-> TabFlow 是一个纯前端在线工具：把 Guitar Pro 乐谱（.gp3 / .gp4 / .gp5 / .gpx / .gp）转换成一行横向滚动的"动态谱"视频，可与演奏视频对齐同步，并导出白色、黑色或透明背景（Alpha 通道 WebM）的视频，直接叠加到演奏画面上。
+> TabFlow 是一个纯前端在线工具：把 Guitar Pro 乐谱（.gp3 / .gp4 / .gp5 / .gpx / .gp）转换成一行横向滚动的"动态谱"视频，可与演奏视频对齐同步，并导出白色、黑色或透明背景（Alpha 通道 WebM）的视频，直接叠加到演奏画面上。界面支持中文与英文，可通过顶栏「中文 / EN」切换，并会依据浏览器语言自动选择。
 
 - 在线使用（无需安装、无需注册，所有处理都在浏览器本地完成，乐谱与视频不会上传到任何服务器）：https://tabflow.bezhuang.cn/
 - 开源仓库（MPL-2.0）：https://github.com/Bezhuang/tabflow
@@ -24,4 +24,12 @@
 
 ## 技术栈
 
-React + TypeScript + Vite，静态站点，可部署到 GitHub Pages / Vercel 等任意静态托管。乐谱解析与排版渲染由 alphaTab 提供（MPL-2.0），音乐符号使用 Bravura 字体；视频导出使用 Canvas 合成 + MediaRecorder 实时录制。
+React + TypeScript + Vite，静态站点，可部署到 GitHub Pages / Vercel 等任意静态托管。乐谱解析与排版渲染由 alphaTab 提供（MPL-2.0），音乐符号使用 Bravura 字体；视频导出使用 Canvas 合成 + MediaRecorder 实时录制。界面文案支持中英文双语（src/i18n），并适配手机端触屏与窄屏布局。
+
+## English
+
+- TabFlow is a purely client-side web tool that turns Guitar Pro scores (.gp3 / .gp4 / .gp5 / .gpx / .gp) into a single-line, horizontally scrolling "dynamic tab" video, which can be synced to a performance video and exported with a white, black or transparent (alpha-channel WebM) background for overlaying on footage.
+- The UI is fully available in English and Chinese, switchable via the "中文 / EN" toggle in the top bar; the language is auto-detected from the browser on first visit and remembered afterwards. The interface is responsive and touch-optimized for phones.
+- Live app (no install, no sign-up; all processing happens locally in the browser, scores and videos are never uploaded): https://tabflow.bezhuang.cn/
+- Repository (MPL-2.0): https://github.com/Bezhuang/tabflow
+- Author: Bezhuang · © 2026 Bezhuang · Licensed under Mozilla Public License 2.0 (MPL-2.0)

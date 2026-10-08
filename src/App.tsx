@@ -11,13 +11,18 @@ import {
   setVideoMuted,
   supportedMimeTypes,
 } from './core/exporter';
+import type { MimeCandidate } from './core/exporter';
+import { useI18n } from './i18n/context';
+import type { Lang, MsgKey } from './i18n/messages';
+// 非响应式翻译：用于不适合因语言切换而重跑的位置（如谱面渲染副作用）
+import { setActiveLang, t as tActive } from './i18n/translate';
 import './styles.css';
 
-const SIZE_PRESETS: { label: string; w: number; h: number }[] = [
-  { label: '1080P 横屏 16:9', w: 1920, h: 1080 },
-  { label: '720P 横屏 16:9', w: 1280, h: 720 },
-  { label: '竖屏 9:16（Shorts/Reels）', w: 1080, h: 1920 },
-  { label: '方形 1:1', w: 1080, h: 1080 },
+const SIZE_PRESETS: { labelKey: MsgKey; w: number; h: number }[] = [
+  { labelKey: 'canvas.preset1080p', w: 1920, h: 1080 },
+  { labelKey: 'canvas.preset720p', w: 1280, h: 720 },
+  { labelKey: 'canvas.presetPortrait', w: 1080, h: 1920 },
+  { labelKey: 'canvas.presetSquare', w: 1080, h: 1080 },
 ];
 
 function fmtTime(t: number): string {
@@ -39,11 +44,14 @@ interface ExportState {
 }
 
 export default function App() {
+  const { t, lang, setLang } = useI18n();
   // ---- 谱面状态 ----
   const [score, setScore] = useState<AT.model.Score | null>(null);
   const [trackInfos, setTrackInfos] = useState<TrackInfo[]>([]);
   const [selectedTrack, setSelectedTrack] = useState<number>(0);
   const [fileName, setFileName] = useState('');
+  /** 当前谱面是否为内置示例曲：其文件名是合成的展示文案，需随语言实时变化 */
+  const [isDemo, setIsDemo] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -118,6 +126,9 @@ export default function App() {
   stripRef.current = strip;
 
   const duration = hasVideo ? videoDuration || 0 : strip?.tempoMap.totalSec ?? 0;
+
+  /** 展示用文件名：上传文件用真实文件名，内置示例曲随语言实时切换 */
+  const displayFileName = isDemo ? t('demo.fileName') : fileName;
 
   // 每次渲染都刷新供 rAF 循环读取的快照
   const liveRef = useRef({
@@ -260,7 +271,7 @@ export default function App() {
       .catch((err) => {
         if (!cancelled)
           setError(
-            '谱面渲染失败：' +
+            tActive('err.renderStrip') +
               (err instanceof Error ? err.message + ' | ' + String(err.stack || '').slice(0, 260) : String(err)),
           );
       })
@@ -301,7 +312,7 @@ export default function App() {
   });
 
   // ---- 载入 GP 文件 ----
-  const applyScore = useCallback((sc: AT.model.Score, name: string) => {
+  const applyScore = useCallback((sc: AT.model.Score, name: string, demo = false) => {
     const infos = getTrackInfos(sc);
     // 默认选中第一条有内容的非鼓轨（与 Guitar Pro 默认显示第 1 轨一致）
     const first =
@@ -310,6 +321,7 @@ export default function App() {
     setTrackInfos(infos);
     setSelectedTrack(first?.index ?? 0);
     setFileName(name);
+    setIsDemo(demo);
     setError('');
   }, []);
 
@@ -331,8 +343,24 @@ export default function App() {
 
   const loadDemo = useCallback(() => {
     const sc = loadDemoScore();
-    applyScore(sc, '示例曲（内置）');
+    // 示例曲没有真实文件名，展示名由 displayFileName 按当前语言派生
+    applyScore(sc, '', true);
   }, [applyScore]);
+
+  /**
+   * 切换语言。内置示例曲的轨道名会被解析进谱面并绘制到画布上，必须按新语言重新生成；
+   * 由于非 React 翻译器（core 与事件回调用的 t）读的是模块单例，这里先切单例再重建，
+   * 否则示例曲会用旧语言生成。上传的谱面维持原样（其轨道名来自文件本身）。
+   */
+  const switchLang = useCallback(
+    (next: Lang) => {
+      if (next === lang) return;
+      setActiveLang(next);
+      setLang(next);
+      if (isDemo) applyScore(loadDemoScore(), '', true);
+    },
+    [applyScore, isDemo, lang, setLang],
+  );
 
   // ---- 载入演奏视频 ----
   const openVideoFile = useCallback(
@@ -409,9 +437,9 @@ export default function App() {
       if (!file) return;
       if (/\.(gp|gp3|gp4|gp5|gpx)$/i.test(file.name)) void openGpFile(file);
       else if (file.type.startsWith('video/') || /\.(mp4|mov|webm|m4v|mkv|avi)$/i.test(file.name)) openVideoFile(file);
-      else setError('不支持的文件类型：请拖入 Guitar Pro 文件（.gp/.gp3/.gp4/.gp5/.gpx）或视频文件');
+      else setError(t('err.unsupportedFile'));
     },
-    [openGpFile, openVideoFile],
+    [openGpFile, openVideoFile, t],
   );
 
   // ---- 导出 ----
@@ -434,10 +462,10 @@ export default function App() {
     cancelExportRef.current = false;
     const s = rangeMode === 'full' ? 0 : rangeStart;
     const e = rangeMode === 'full' ? duration : rangeEnd;
-    const base = (fileName || 'tab').replace(/\.[^.]+$/, '');
+    const base = (displayFileName || 'tab').replace(/\.[^.]+$/, '');
     const ext = chosenMime.includes('mp4') ? 'mp4' : 'webm';
-    const name = `${base}-滚动谱-${W}x${H}.${ext}`;
-    setExportState({ phase: 'running', progress: 0, message: '正在实时录制…', resultSize: 0, resultName: name });
+    const name = `${base}${t('export.fileSuffix')}${W}x${H}.${ext}`;
+    setExportState({ phase: 'running', progress: 0, message: t('export.recordingMsg'), resultSize: 0, resultName: name });
     try {
       const blob = await exportVideo({
         width: W,
@@ -465,7 +493,7 @@ export default function App() {
         setExportState((prev) => ({ ...prev, phase: 'error', message: msg }));
       }
     }
-  }, [chosenMime, composeFrame, duration, fileName, fps, H, hasVideo, includeAudio, monitorMuted, rangeEnd, rangeMode, rangeStart, W]);
+  }, [chosenMime, composeFrame, displayFileName, duration, fps, H, hasVideo, includeAudio, monitorMuted, rangeEnd, rangeMode, rangeStart, t, W]);
 
   const hasScore = !!score;
 
@@ -483,14 +511,24 @@ export default function App() {
           <span className="whale">
             <img src="./whalegirl-head.png" width={30} height={30} alt="TabFlow" />
           </span>
-          TabFlow<span className="sub">Guitar Pro → 滚动动态谱视频</span>
+          TabFlow<span className="sub">{t('app.brandSub')}</span>
         </div>
         <span className="file-chip">
-          {score ? `${fileName} · ${score.tracks.length} 轨道 · ${score.masterBars.length} 小节` : '未打开谱面'}
+          {score
+            ? t('app.fileChip', { name: displayFileName, tracks: score.tracks.length, bars: score.masterBars.length })
+            : t('app.noScore')}
         </span>
         <div className="spacer" />
+        <div className="seg lang-switch" role="group" aria-label={t('app.langAria')}>
+          <button className={lang === 'zh' ? 'on' : ''} onClick={() => switchLang('zh')} aria-pressed={lang === 'zh'}>
+            中文
+          </button>
+          <button className={lang === 'en' ? 'on' : ''} onClick={() => switchLang('en')} aria-pressed={lang === 'en'}>
+            EN
+          </button>
+        </div>
         <label className="btn ghost" style={{ cursor: 'pointer' }}>
-          打开 GP 文件
+          {t('app.openGp')}
           <input
             type="file"
             accept=".gp,.gp3,.gp4,.gp5,.gpx"
@@ -502,15 +540,15 @@ export default function App() {
             }}
           />
         </label>
-        <button className="btn ghost" onClick={loadDemo}>示例曲</button>
-        <button className="btn primary" disabled={!hasScore || rendering} onClick={openExport}>导出视频</button>
+        <button className="btn ghost" onClick={loadDemo}>{t('app.demo')}</button>
+        <button className="btn primary" disabled={!hasScore || rendering} onClick={openExport}>{t('app.exportVideo')}</button>
         <a
           className="btn ghost icon-btn"
           href="https://github.com/Bezhuang/tabflow"
           target="_blank"
           rel="noreferrer"
-          title="GitHub 开源仓库（MPL-2.0）"
-          aria-label="GitHub 开源仓库"
+          title={t('app.githubTitle')}
+          aria-label={t('app.githubAria')}
         >
           <GithubIcon />
         </a>
@@ -518,18 +556,18 @@ export default function App() {
 
       {!hasScore ? (
         <div className="empty">
-          <h1>把 Guitar Pro 乐谱变成滚动的动态谱视频</h1>
+          <h1>{t('empty.title')}</h1>
           <p>
-            上传 .gp / .gp3 / .gp4 / .gp5 / .gpx 文件，生成一行横向滚动的动态谱；
+            {t('empty.desc1')}
             <br />
-            可导入你的演奏视频对齐同步，导出白色或透明背景的视频，直接叠加到剪辑软件里。
+            {t('empty.desc2')}
           </p>
           <div className={`dropzone ${dragOver ? 'over' : ''}`} onClick={() => document.getElementById('gp-input')?.click()}>
             <div className="icon">
-              <img src="./whalegirl.png" width={150} height={150} alt="鲸鱼娘" />
+              <img src="./whalegirl.png" width={150} height={150} alt={t('img.mascot')} />
             </div>
-            <div>点击选择或拖入 Guitar Pro 文件</div>
-            <div className="fmts">支持 .gp .gp3 .gp4 .gp5 .gpx（Guitar Pro 3 – 8）· 也可以拖入演奏视频用于同步</div>
+            <div>{t('empty.dropTitle')}</div>
+            <div className="fmts">{t('empty.dropFormats')}</div>
             <input
               id="gp-input"
               type="file"
@@ -543,27 +581,27 @@ export default function App() {
             />
           </div>
           <div className="empty-actions">
-            <button className="btn" onClick={loadDemo}>先看看示例曲</button>
+            <button className="btn" onClick={loadDemo}>{t('empty.tryDemo')}</button>
           </div>
           <div className="copyright">
-            © 2026 Bezhuang ·{' '}
+            {t('app.copyrightPrefix')}
             <a href="https://github.com/Bezhuang/tabflow" target="_blank" rel="noreferrer">
               GitHub
-            </a>{' '}
-            · MPL-2.0 开源
+            </a>
+            {t('app.copyrightSuffix')}
           </div>
           {error && <div className="error-text">{error}</div>}
-          {loading && <div className="hint">解析中…</div>}
+          {loading && <div className="hint">{t('empty.loading')}</div>}
         </div>
       ) : (
         <div className="main">
           <div className="stage">
             <div className={`canvas-frame ${needsAlpha ? 'transparent-bg' : ''}`}>
               <canvas ref={canvasRef} width={W} height={H} />
-              {rendering && <div className="rendering-tip">谱面渲染中…</div>}
+              {rendering && <div className="rendering-tip">{t('app.renderingTip')}</div>}
             </div>
             <div className="transport">
-              <button className="play-btn" onClick={() => void togglePlay()} title="空格键 播放/暂停">
+              <button className="play-btn" onClick={() => void togglePlay()} title={t('app.playTitle')} aria-label={t('app.playTitle')}>
                 {playing ? '❚❚' : '▶'}
               </button>
               <span className="time">
@@ -585,28 +623,28 @@ export default function App() {
           <aside className="sidebar">
             {/* 轨道 */}
             <div className="section">
-              <h3>音轨</h3>
+              <h3>{t('track.heading')}</h3>
               <div className="card">
                 <div className="tracks">
-                  {trackInfos.map((t) => (
+                  {trackInfos.map((tk) => (
                     <button
-                      key={t.index}
-                      className={`track-chip ${selectedTrack === t.index ? 'on' : ''}`}
-                      onClick={() => setSelectedTrack(t.index)}
-                      title={`${t.name} · ${t.noteCount} 个音符`}
+                      key={tk.index}
+                      className={`track-chip ${selectedTrack === tk.index ? 'on' : ''}`}
+                      onClick={() => setSelectedTrack(tk.index)}
+                      title={t('track.tip', { name: tk.name, notes: tk.noteCount })}
                     >
-                      {t.name}
-                      {t.isPerc && <span className="badge">鼓</span>}
+                      {tk.name}
+                      {tk.isPerc && <span className="badge">{t('track.percBadge')}</span>}
                     </button>
                   ))}
                 </div>
-                <div className="hint">选择要显示的音轨（叠加到演奏视频通常只选主奏轨）。</div>
+                <div className="hint">{t('track.hint')}</div>
               </div>
             </div>
 
             {/* 演奏视频同步 */}
             <div className="section">
-              <h3>演奏视频同步</h3>
+              <h3>{t('video.heading')}</h3>
               <div className="card">
                 {hasVideo ? (
                   <>
@@ -614,10 +652,10 @@ export default function App() {
                       <span style={{ fontSize: 12.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         🎬 {videoName}
                       </span>
-                      <button className="btn small" onClick={removeVideo}>移除</button>
+                      <button className="btn small" onClick={removeVideo}>{t('video.remove')}</button>
                     </div>
                     <label className="field" style={{ marginTop: 10 }}>
-                      谱面偏移（早 + / 晚 −）<span className="val">{offsetMs} ms</span>
+                      {t('video.offsetLabel')}<span className="val">{offsetMs} ms</span>
                       <input
                         type="range"
                         min={-5000}
@@ -630,7 +668,7 @@ export default function App() {
                     <div className="sync-row">
                       <button className="btn small nudge" onClick={() => setOffsetMs((v) => v - 50)}>−50</button>
                       <button className="btn small nudge" onClick={() => setOffsetMs((v) => v - 10)}>−10</button>
-                      <button className="btn small nudge" onClick={() => setOffsetMs(0)}>归零</button>
+                      <button className="btn small nudge" onClick={() => setOffsetMs(0)}>{t('video.reset')}</button>
                       <button className="btn small nudge" onClick={() => setOffsetMs((v) => v + 10)}>+10</button>
                       <button className="btn small nudge" onClick={() => setOffsetMs((v) => v + 50)}>+50</button>
                     </div>
@@ -641,23 +679,21 @@ export default function App() {
                         aria-checked={!monitorMuted}
                         className={`switch ${monitorMuted ? '' : 'on'}`}
                         onClick={() => setMonitorMuted((v) => !v)}
-                        title="预览时播放视频声音"
+                        title={t('video.soundTitle')}
                       >
                         <span className="knob" />
                       </button>
                       <span className="switch-label">
-                        视频声音
-                        <span className="switch-state">{monitorMuted ? '预览静音' : '预览有声'}</span>
+                        {t('video.sound')}
+                        <span className="switch-state">{monitorMuted ? t('video.muted') : t('video.unmuted')}</span>
                       </span>
                     </div>
-                    <div className="hint">
-                      播放时以视频为主时钟：视频走到哪，谱面滚到哪。调整偏移让音符对上你的演奏，导出的视频保持这个同步关系。
-                    </div>
+                    <div className="hint">{t('video.syncHint')}</div>
                   </>
                 ) : (
                   <>
                     <label className="btn" style={{ display: 'block', textAlign: 'center', cursor: 'pointer' }}>
-                      导入演奏视频（可选）
+                      {t('video.import')}
                       <input
                         type="file"
                         accept="video/*"
@@ -669,9 +705,7 @@ export default function App() {
                         }}
                       />
                     </label>
-                    <div className="hint">
-                      导入后：谱面跟随视频时间轴滚动，可微调偏移实现逐帧对齐；导出时可烧录画面与声音，或只导出透明背景的谱面图层。
-                    </div>
+                    <div className="hint">{t('video.importHint')}</div>
                   </>
                 )}
               </div>
@@ -679,10 +713,10 @@ export default function App() {
 
             {/* 画面 */}
             <div className="section">
-              <h3>画面尺寸与缩放</h3>
+              <h3>{t('canvas.heading')}</h3>
               <div className="card">
                 <label className="field">
-                  输出尺寸 <span className="val">{W}×{H}</span>
+                  {t('canvas.outputSize')} <span className="val">{W}×{H}</span>
                   <select
                     value={sizePreset}
                     onChange={(e) => {
@@ -696,10 +730,10 @@ export default function App() {
                   >
                     {SIZE_PRESETS.map((p) => (
                       <option key={`${p.w}x${p.h}`} value={`${p.w}x${p.h}`}>
-                        {p.label}（{p.w}×{p.h}）
+                        {t(p.labelKey)}（{p.w}×{p.h}）
                       </option>
                     ))}
-                    <option value="custom">自定义…</option>
+                    <option value="custom">{t('canvas.custom')}</option>
                   </select>
                 </label>
                 {isCustom && (
@@ -710,7 +744,7 @@ export default function App() {
                       max={3840}
                       value={customW}
                       onChange={(e) => setCustomW(parseInt(e.target.value || '0', 10))}
-                      placeholder="宽"
+                      placeholder={t('canvas.width')}
                     />
                     <span style={{ color: 'var(--muted)' }}>×</span>
                     <input
@@ -719,20 +753,27 @@ export default function App() {
                       max={3840}
                       value={customH}
                       onChange={(e) => setCustomH(parseInt(e.target.value || '0', 10))}
-                      placeholder="高"
+                      placeholder={t('canvas.height')}
                     />
                   </div>
                 )}
                 <label className="field" style={{ marginTop: 10 }}>
-                  谱面缩放 <span className="val">{zoomPct}%</span>
+                  {t('canvas.zoom')} <span className="val">{zoomPct}%</span>
                   <input type="range" min={50} max={200} step={5} value={zoomPct} onChange={(e) => setZoomPct(parseInt(e.target.value, 10))} />
                 </label>
                 <label className="field">
-                  播放头锁定位置 <span className="val">{anchorPct}%</span>
+                  {t('canvas.anchor')} <span className="val">{anchorPct}%</span>
                   <input type="range" min={20} max={80} step={1} value={anchorPct} onChange={(e) => setAnchorPct(parseInt(e.target.value, 10))} />
                 </label>
                 <label className="field">
-                  垂直位置 <span className="val">{vertPct === 50 ? '居中' : vertPct < 50 ? `偏上 ${50 - vertPct}` : `偏下 ${vertPct - 50}`}</span>
+                  {t('canvas.vert')}{' '}
+                  <span className="val">
+                    {vertPct === 50
+                      ? t('canvas.vertCenter')
+                      : vertPct < 50
+                        ? t('canvas.vertUp', { n: 50 - vertPct })
+                        : t('canvas.vertDown', { n: vertPct - 50 })}
+                  </span>
                   <input type="range" min={0} max={100} step={5} value={vertPct} onChange={(e) => setVertPct(parseInt(e.target.value, 10))} />
                 </label>
               </div>
@@ -740,43 +781,43 @@ export default function App() {
 
             {/* 样式 */}
             <div className="section">
-              <h3>样式</h3>
+              <h3>{t('style.heading')}</h3>
               <div className="card">
                 <div className="seg">
                   <button className={!transparent && themeMode === 'light' ? 'on' : ''} onClick={() => setThemeMode('light')}>
-                    白底黑谱
+                    {t('style.light')}
                   </button>
                   <button className={themeMode === 'dark' ? 'on' : ''} onClick={() => setThemeMode('dark')}>
-                    黑底白谱
+                    {t('style.dark')}
                   </button>
                   <button className={transparent ? 'on' : ''} onClick={() => setThemeMode('transparent')}>
-                    透明背景
+                    {t('style.transparent')}
                   </button>
                 </div>
                 {transparent && (
                   <>
-                    <div className="row" style={{ marginTop: 10 }}>
-                      <span style={{ fontSize: 12.5, color: 'var(--muted)' }}>谱面颜色</span>
+                    <div className="row color-row" style={{ marginTop: 10 }}>
+                      <span style={{ fontSize: 12.5, color: 'var(--muted)' }}>{t('style.fgColor')}</span>
                       <input type="color" value={fgColor} onChange={(e) => setFgColor(e.target.value)} />
-                      <button className="btn small" onClick={() => setFgColor('#ffffff')}>白</button>
-                      <button className="btn small" onClick={() => setFgColor('#17191d')}>黑</button>
-                      <button className="btn small" onClick={() => setFgColor('#4d6bfe')}>蓝</button>
-                      <button className="btn small" onClick={() => setFgColor('#ffb020')}>黄</button>
+                      <button className="btn small" onClick={() => setFgColor('#ffffff')}>{t('style.white')}</button>
+                      <button className="btn small" onClick={() => setFgColor('#17191d')}>{t('style.black')}</button>
+                      <button className="btn small" onClick={() => setFgColor('#4d6bfe')}>{t('style.blue')}</button>
+                      <button className="btn small" onClick={() => setFgColor('#ffb020')}>{t('style.yellow')}</button>
                     </div>
-                    <div className="row" style={{ marginTop: 8 }}>
-                      <span style={{ fontSize: 12.5, color: 'var(--muted)' }}>背景颜色</span>
+                    <div className="row color-row" style={{ marginTop: 8 }}>
+                      <span style={{ fontSize: 12.5, color: 'var(--muted)' }}>{t('style.bgColor')}</span>
                       <input type="color" value={bgColor ?? '#10131a'} onChange={(e) => setBgColor(e.target.value)} />
                       <button
                         className="btn small"
                         onClick={() => setBgColor(null)}
-                        title="无背景：导出完全透明的视频"
+                        title={t('style.noBgTitle')}
                       >
-                        无背景
+                        {t('style.noBg')}
                       </button>
                     </div>
                     {bgColor && (
                       <label className="field" style={{ marginTop: 8 }}>
-                        背景不透明度 <span className="val">{bgOpacity}%</span>
+                        {t('style.bgOpacity')} <span className="val">{bgOpacity}%</span>
                         <input type="range" min={0} max={100} step={5} value={bgOpacity} onChange={(e) => setBgOpacity(parseInt(e.target.value, 10))} />
                       </label>
                     )}
@@ -784,54 +825,54 @@ export default function App() {
                 )}
                 {!transparent && (
                   <label className="field" style={{ marginTop: 10 }}>
-                    背景不透明度（叠加演奏视频时降低）<span className="val">{bgOpacity}%</span>
+                    {t('style.bgOpacityHinted')}<span className="val">{bgOpacity}%</span>
                     <input type="range" min={0} max={100} step={5} value={bgOpacity} onChange={(e) => setBgOpacity(parseInt(e.target.value, 10))} />
                   </label>
                 )}
                 <label className="field" style={{ marginTop: 10 }}>
-                  谱面不透明度 <span className="val">{opacity}%</span>
+                  {t('style.opacity')} <span className="val">{opacity}%</span>
                   <input type="range" min={20} max={100} step={5} value={opacity} onChange={(e) => setOpacity(parseInt(e.target.value, 10))} />
                 </label>
                 <label className="field" style={{ marginTop: 10 }}>
-                  记谱方式
+                  {t('style.notation')}
                   <div className="seg" style={{ marginTop: 6 }}>
                     <button
                       disabled={notationLocked}
                       className={effectiveNotationMode === 'jianpu' ? 'on' : ''}
                       onClick={() => setNotationMode('jianpu')}
                     >
-                      简谱
+                      {t('style.jianpu')}
                     </button>
                     <button
                       disabled={notationLocked}
                       className={effectiveNotationMode === 'standard' ? 'on' : ''}
                       onClick={() => setNotationMode('standard')}
                     >
-                      五线谱
+                      {t('style.standard')}
                     </button>
                     <button
                       disabled={notationLocked}
                       className={effectiveNotationMode === 'tab' ? 'on' : ''}
                       onClick={() => setNotationMode('tab')}
                     >
-                      六线谱
+                      {t('style.tab')}
                     </button>
                   </div>
                 </label>
-                {selInfo?.grandStaff && <div className="hint">钢琴为左右手大谱表（高音谱 + 低音谱），固定五线谱记谱。</div>}
-                {selInfo?.isPerc && <div className="hint">架子鼓使用标准鼓谱记谱（五线谱 + 鼓件符头）。</div>}
-                {needsAlpha && <div className="hint">透明 / 半透明背景导出为带 Alpha 通道的 WebM（VP8），需使用 Chrome / Edge 浏览器。</div>}
+                {selInfo?.grandStaff && <div className="hint">{t('style.grandStaffHint')}</div>}
+                {selInfo?.isPerc && <div className="hint">{t('style.percHint')}</div>}
+                {needsAlpha && <div className="hint">{t('style.alphaHint')}</div>}
               </div>
             </div>
 
             {error && <div className="error-text">{error}</div>}
 
             <div className="copyright">
-              © 2026 Bezhuang ·{' '}
+              {t('app.copyrightPrefix')}
               <a href="https://github.com/Bezhuang/tabflow" target="_blank" rel="noreferrer">
                 GitHub
-              </a>{' '}
-              · MPL-2.0 开源
+              </a>
+              {t('app.copyrightSuffix')}
             </div>
           </aside>
         </div>
@@ -919,7 +960,7 @@ interface ExportModalProps {
   H: number;
   fps: number;
   setFps: (v: number) => void;
-  mimes: { mime: string; label: string }[];
+  mimes: MimeCandidate[];
   mimeIdx: number;
   setMimeIdx: (v: number) => void;
   transparent: boolean;
@@ -942,36 +983,37 @@ interface ExportModalProps {
 }
 
 function ExportModal(p: ExportModalProps) {
+  const { t } = useI18n();
   const running = p.state.phase === 'running';
   const span = p.rangeMode === 'full' ? p.duration : p.rangeEnd - p.rangeStart;
   const remain = Math.max(0, span * (1 - p.state.progress));
   return (
     <div className="modal-mask" onClick={running ? undefined : p.onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <h2>导出视频</h2>
+        <h2>{t('export.modalTitle')}</h2>
 
         {p.state.phase === 'idle' && (
           <>
             <div className="card" style={{ background: 'var(--bg)' }}>
               <div className="row between">
-                <span style={{ color: 'var(--muted)', fontSize: 12.5 }}>输出尺寸</span>
+                <span style={{ color: 'var(--muted)', fontSize: 12.5 }}>{t('export.outputSize')}</span>
                 <span style={{ fontSize: 13 }}>
                   {p.W} × {p.H} · {p.fps}fps
                 </span>
               </div>
               <label className="field" style={{ marginTop: 10 }}>
-                帧率
+                {t('export.fps')}
                 <select value={p.fps} onChange={(e) => p.setFps(parseInt(e.target.value, 10))}>
                   <option value={30}>30 fps</option>
                   <option value={60}>60 fps</option>
                 </select>
               </label>
               <label className="field" style={{ marginTop: 10 }}>
-                格式
+                {t('export.format')}
                 <select value={p.mimeIdx} onChange={(e) => p.setMimeIdx(parseInt(e.target.value, 10))}>
                   {p.mimes.map((m, i) => (
                     <option key={m.mime} value={i}>
-                      {m.label}
+                      {m.labelKey ? t(m.labelKey) : m.label}
                     </option>
                   ))}
                 </select>
@@ -980,7 +1022,7 @@ function ExportModal(p: ExportModalProps) {
                 <>
                   <label className="check-row" style={{ marginTop: 10 }}>
                     <input type="checkbox" checked={p.burnVideo} onChange={(e) => p.setBurnVideo(e.target.checked)} />
-                    导出时烧录演奏视频画面
+                    {t('export.burnVideo')}
                   </label>
                   <label className={`check-row ${p.burnVideo ? '' : 'disabled'}`}>
                     <input
@@ -989,18 +1031,18 @@ function ExportModal(p: ExportModalProps) {
                       checked={p.includeAudio}
                       onChange={(e) => p.setIncludeAudio(e.target.checked)}
                     />
-                    包含视频声音
+                    {t('export.includeAudio')}
                   </label>
                 </>
               )}
               <label className="field" style={{ marginTop: 10 }}>
-                导出范围
+                {t('export.range')}
                 <div className="seg" style={{ marginTop: 6 }}>
                   <button className={p.rangeMode === 'full' ? 'on' : ''} onClick={() => p.setRangeMode('full')}>
-                    整曲
+                    {t('export.full')}
                   </button>
                   <button className={p.rangeMode === 'custom' ? 'on' : ''} onClick={() => p.setRangeMode('custom')}>
-                    自定义
+                    {t('export.custom')}
                   </button>
                 </div>
               </label>
@@ -1023,18 +1065,18 @@ function ExportModal(p: ExportModalProps) {
                     value={p.rangeEnd}
                     onChange={(e) => p.setRangeEnd(parseFloat(e.target.value || '0'))}
                   />
-                  <span style={{ color: 'var(--muted)', fontSize: 12 }}>秒</span>
+                  <span style={{ color: 'var(--muted)', fontSize: 12 }}>{t('export.seconds')}</span>
                 </div>
               )}
             </div>
             {p.transparent && (
-              <div className="hint">透明 / 半透明背景将以带 Alpha 通道的 WebM 导出，Premiere / Final Cut / DaVinci / 剪映均可直接叠加。</div>
+              <div className="hint">{t('export.alphaHint')}</div>
             )}
-            <div className="hint">导出为实时录制：时长与选区等长，请保持页面在前台。</div>
+            <div className="hint">{t('export.realtimeHint')}</div>
             <div className="actions">
-              <button className="btn" onClick={p.onClose}>取消</button>
+              <button className="btn" onClick={p.onClose}>{t('export.cancel')}</button>
               <button className="btn primary" disabled={!p.canExport} onClick={p.onStart}>
-                开始导出
+                {t('export.start')}
               </button>
             </div>
           </>
@@ -1044,15 +1086,15 @@ function ExportModal(p: ExportModalProps) {
           <>
             <div className="progress-sub">
               <span className="rec-dot" />
-              正在实时录制，请勿切换标签页…
+              {t('export.recording')}
             </div>
             <div className="progress">
               <div style={{ width: `${Math.round(p.state.progress * 100)}%` }} />
             </div>
             <div className="progress-num">{Math.round(p.state.progress * 100)}%</div>
-            <div className="progress-sub">预计剩余 {fmtTime(remain)}</div>
+            <div className="progress-sub">{t('export.remaining', { time: fmtTime(remain) })}</div>
             <div className="actions">
-              <button className="btn" onClick={p.onCancel}>取消导出</button>
+              <button className="btn" onClick={p.onCancel}>{t('export.cancelExport')}</button>
             </div>
           </>
         )}
@@ -1061,24 +1103,24 @@ function ExportModal(p: ExportModalProps) {
           <div className="done-box">
             <div className="big">✅</div>
             <p>
-              已导出并开始下载
+              {t('export.doneText')}
               <br />
               <b>{p.state.resultName}</b>
               <br />
               {(p.state.resultSize / 1024 / 1024).toFixed(1)} MB
             </p>
             <div className="actions" style={{ justifyContent: 'center' }}>
-              <button className="btn primary" onClick={p.onClose}>完成</button>
+              <button className="btn primary" onClick={p.onClose}>{t('export.complete')}</button>
             </div>
           </div>
         )}
 
         {p.state.phase === 'error' && (
           <>
-            <div className="error-text">导出失败：{p.state.message}</div>
+            <div className="error-text">{t('export.failed', { msg: p.state.message })}</div>
             <div className="actions">
-              <button className="btn" onClick={p.onClose}>关闭</button>
-              <button className="btn primary" onClick={p.onStart}>重试</button>
+              <button className="btn" onClick={p.onClose}>{t('export.close')}</button>
+              <button className="btn primary" onClick={p.onStart}>{t('export.retry')}</button>
             </div>
           </>
         )}

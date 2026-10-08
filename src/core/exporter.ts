@@ -1,16 +1,39 @@
+import { t, type MsgKey } from '../i18n/translate';
+
 export interface MimeCandidate {
   mime: string;
+  /** 中文兜底标签（保留原有字段与语义，未使用 i18n 的调用方不受影响） */
   label: string;
+  /** i18n 键：UI 应以 t(labelKey) 显示；未提供时回退到 label */
+  labelKey?: MsgKey;
   alpha: boolean;
   audio: boolean;
 }
 
 export function supportedMimeTypes(): MimeCandidate[] {
   const all: MimeCandidate[] = [
-    { mime: 'video/webm;codecs=vp9,opus', label: 'WebM · VP9（画质优先）', alpha: false, audio: true },
-    { mime: 'video/webm;codecs=vp8,opus', label: 'WebM · VP8（支持透明通道）', alpha: true, audio: true },
-    { mime: 'video/mp4;codecs=avc1.42E01E,mp4a.40.2', label: 'MP4 · H.264', alpha: false, audio: true },
-    { mime: 'video/webm', label: 'WebM（默认）', alpha: false, audio: true },
+    {
+      mime: 'video/webm;codecs=vp9,opus',
+      label: 'WebM · VP9（画质优先）',
+      labelKey: 'mime.vp9',
+      alpha: false,
+      audio: true,
+    },
+    {
+      mime: 'video/webm;codecs=vp8,opus',
+      label: 'WebM · VP8（支持透明通道）',
+      labelKey: 'mime.vp8',
+      alpha: true,
+      audio: true,
+    },
+    {
+      mime: 'video/mp4;codecs=avc1.42E01E,mp4a.40.2',
+      label: 'MP4 · H.264',
+      labelKey: 'mime.mp4',
+      alpha: false,
+      audio: true,
+    },
+    { mime: 'video/webm', label: 'WebM（默认）', labelKey: 'mime.webmDefault', alpha: false, audio: true },
   ];
   return all.filter((c) => typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(c.mime));
 }
@@ -85,7 +108,7 @@ export function exportVideo(opts: ExportOptions): Promise<Blob> {
     canvas.height = opts.height;
     const ctx = canvas.getContext('2d', { alpha: true });
     if (!ctx) {
-      reject(new Error('无法创建画布上下文'));
+      reject(new Error(t('err.canvasContext')));
       return;
     }
 
@@ -98,7 +121,7 @@ export function exportVideo(opts: ExportOptions): Promise<Blob> {
         audioGraph.source.connect(dest);
         for (const track of dest.stream.getAudioTracks()) stream.addTrack(track);
       } catch (err) {
-        console.warn('音频采集不可用，仅录制画面', err);
+        console.warn(t('err.audioCapture'), err);
       }
     }
 
@@ -111,7 +134,7 @@ export function exportVideo(opts: ExportOptions): Promise<Blob> {
         audioBitsPerSecond: 192_000,
       });
     } catch (err) {
-      reject(new Error(`当前浏览器不支持该录制格式: ${String(err)}`));
+      reject(new Error(t('err.mimeUnsupported', { err: String(err) })));
       return;
     }
 
@@ -121,7 +144,7 @@ export function exportVideo(opts: ExportOptions): Promise<Blob> {
     };
     recorder.onerror = () => {
       cleanup();
-      reject(new Error('录制过程中出现错误'));
+      reject(new Error(t('err.recordFailed')));
     };
     recorder.onstop = () => {
       cleanup();

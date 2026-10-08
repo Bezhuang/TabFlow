@@ -9,6 +9,7 @@ import {
 const Color = model.Color;
 import bravuraWoff2 from '@coderline/alphatab/font/Bravura.woff2?url';
 import { TempoMap } from './tempo';
+import { t } from '../i18n/translate';
 
 // Bravura 音乐字体随构建产物一起发布
 const FONT_DIR = bravuraWoff2.slice(0, bravuraWoff2.lastIndexOf('/') + 1);
@@ -152,7 +153,7 @@ function renderOnce(score: model.Score, trackIndexes: number[], settings: Settin
       if (settled) return;
       settled = true;
       if (!renderer.boundsLookup) {
-        reject(new Error('渲染 bounds 缺失'));
+        reject(new Error(t('err.renderBounds')));
         return;
       }
       resolve({
@@ -305,7 +306,7 @@ export async function renderStrip(score: model.Score, opts: StripOptions): Promi
 
   const render = await renderOnce(score, opts.trackIndexes, settings);
   if (render.partials.length === 0) {
-    throw new Error('谱面渲染结果为空（分片 0）');
+    throw new Error(t('err.renderEmpty'));
   }
   const { totalWidth, bounds } = render;
   // 有效高度：取分片覆盖范围（水印等注记分片已被过滤）
