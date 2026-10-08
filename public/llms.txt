@@ -11,7 +11,7 @@
 ## 核心功能
 
 - Guitar Pro 3–8 乐谱解析与渲染：简谱、五线谱、六线谱；钢琴左右手大谱表；架子鼓标准鼓谱
-- 横向滚动动态谱：播放头锁定、当前小节高亮，滚动节奏与乐曲速度一致
+- 横向滚动动态谱：播放头锁定、当前小节高亮，滚动节奏与乐曲速度一致；反复、跳房子（多次结尾）与 D.C./D.S./Coda/Fine 记号按真实演奏顺序跳转，总时长含反复段落
 - 与演奏视频同步：导入演奏视频作为主时钟，支持毫秒级偏移微调
 - 视频导出：自定义输出尺寸（16:9 / 9:16 / 1:1 / 自定义）、缩放、垂直位置、背景与谱面颜色、不透明度；支持烧录演奏视频与声音
 - 内置示例曲（吉他 / 贝斯 / 钢琴 / 架子鼓四轨），打开网页即可体验
@@ -28,8 +28,9 @@ React + TypeScript + Vite，静态站点，可部署到 GitHub Pages / Vercel �
 
 ## English
 
-- TabFlow is a purely client-side web tool that turns Guitar Pro scores (.gp3 / .gp4 / .gp5 / .gpx / .gp) into a single-line, horizontally scrolling "dynamic tab" video, which can be synced to a performance video and exported with a white, black or transparent (alpha-channel WebM) background for overlaying on footage.
+- TabFlow is a purely client-side web tool that turns Guitar Pro tabs (.gp3 / .gp4 / .gp5 / .gpx / .gp) into a single-line, horizontally scrolling "dynamic tab" video, which can be synced to a performance video and exported with a white, black or transparent (alpha-channel WebM) background for overlaying on footage.
+- Playback follows the tab's real performance order: repeat signs, alternate endings (volta brackets) and D.C./D.S./Coda/Fine jumps are applied, and the total duration includes the repeated sections.
 - The UI is fully available in English and Chinese, switchable via the "中文 / EN" toggle in the top bar; the language is auto-detected from the browser on first visit and remembered afterwards. The interface is responsive and touch-optimized for phones.
-- Live app (no install, no sign-up; all processing happens locally in the browser, scores and videos are never uploaded): https://tabflow.bezhuang.cn/
+- Live app (no install, no sign-up; all processing happens locally in the browser, tabs and videos are never uploaded): https://tabflow.bezhuang.cn/
 - Repository (MPL-2.0): https://github.com/Bezhuang/tabflow
 - Author: Bezhuang · © 2026 Bezhuang · Licensed under Mozilla Public License 2.0 (MPL-2.0)
