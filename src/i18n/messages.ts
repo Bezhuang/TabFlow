@@ -24,13 +24,15 @@ export const zh = {
   'empty.desc1': '上传 .gp / .gp3 / .gp4 / .gp5 / .gpx 文件，生成一行横向滚动的动态谱；',
   'empty.desc2': '可导入你的演奏视频对齐同步，导出白色或透明背景的视频，直接叠加到剪辑软件里。',
   'empty.dropTitle': '点击选择或拖入 Guitar Pro 文件',
-  'empty.dropFormats': '支持 .gp .gp3 .gp4 .gp5 .gpx（Guitar Pro 3 – 8）· 也可以拖入演奏视频用于同步',
+  'empty.dropFormats': '支持 .gp .gp3 .gp4 .gp5 .gpx（Guitar Pro 3 – 8）',
   'empty.tryDemo': '先看看示例曲',
   'empty.loading': '解析中…',
 
+  // ---- 播放顺序（反复 / 跳房子） ----
+  'playback.hint': '已按反复 / 跳房子记号展开播放：总时长含反复段落，播放头会在反复处跳回。',
+
   // ---- 音轨 ----
   'track.heading': '音轨',
-  'track.percBadge': '鼓',
   'track.tip': '{name} · {notes} 个音符',
   'track.hint': '选择要显示的音轨（叠加到演奏视频通常只选主奏轨）。',
 
@@ -164,7 +166,7 @@ export const en: Record<MsgKey, string> = {
   // ---- 品牌与顶栏 ----
   'app.brandSub': 'Guitar Pro → scrolling tab video',
   'app.langAria': 'Switch language',
-  'app.noScore': 'No score loaded',
+  'app.noScore': 'No tab loaded',
   'app.fileChip': '{name} · {tracks} tracks · {bars} bars',
   'app.openGp': 'Open GP file',
   'app.demo': 'Demo',
@@ -177,20 +179,23 @@ export const en: Record<MsgKey, string> = {
   'app.copyrightSuffix': ' · MPL-2.0 licensed',
 
   // ---- 空状态 ----
-  'empty.title': 'Turn Guitar Pro scores into scrolling tab videos',
+  'empty.title': 'Turn Guitar Pro tabs into scrolling tab videos',
   'empty.desc1':
     'Upload a .gp / .gp3 / .gp4 / .gp5 / .gpx file to generate a single-line, horizontally scrolling tab;',
   'empty.desc2':
     'import your performance video to sync it, then export with a white or transparent background and drop it straight into your editor.',
   'empty.dropTitle': 'Click to choose or drop a Guitar Pro file',
   'empty.dropFormats':
-    'Supports .gp .gp3 .gp4 .gp5 .gpx (Guitar Pro 3 – 8) · you can also drop a performance video to sync',
+    'Supports .gp .gp3 .gp4 .gp5 .gpx (Guitar Pro 3 – 8)',
   'empty.tryDemo': 'Try the demo song',
   'empty.loading': 'Parsing…',
 
+  // ---- 播放顺序（反复 / 跳房子） ----
+  'playback.hint':
+    'Playback follows repeat and alternate-ending marks: the total duration includes repeated sections, and the playhead jumps back at each repeat.',
+
   // ---- 音轨 ----
   'track.heading': 'Tracks',
-  'track.percBadge': '🥁',
   'track.tip': '{name} · {notes} notes',
   'track.hint':
     'Choose which track to display (when overlaying on your video, the lead track is usually enough).',
@@ -220,8 +225,8 @@ export const en: Record<MsgKey, string> = {
   'canvas.anchor': 'Playhead lock position',
   'canvas.vert': 'Vertical position',
   'canvas.vertCenter': 'Centered',
-  'canvas.vertUp': 'Up {n}',
-  'canvas.vertDown': 'Down {n}',
+  'canvas.vertUp': '{n} above center',
+  'canvas.vertDown': '{n} below center',
   'canvas.preset1080p': '1080p landscape 16:9',
   'canvas.preset720p': '720p landscape 16:9',
   'canvas.presetPortrait': 'Portrait 9:16 (Shorts/Reels)',
@@ -245,7 +250,7 @@ export const en: Record<MsgKey, string> = {
   'style.opacity': 'Tab opacity',
   'style.notation': 'Notation',
   'style.jianpu': 'Numbered',
-  'style.standard': 'Staff',
+  'style.standard': 'Standard',
   'style.tab': 'Tablature',
   'style.grandStaffHint':
     'Piano uses a grand staff (treble + bass) and is fixed to standard notation.',
@@ -282,7 +287,7 @@ export const en: Record<MsgKey, string> = {
   'export.fileSuffix': '-scrolling-tab-',
 
   // ---- 导出编码格式（core/exporter 的 mime 标签） ----
-  'mime.vp9': 'WebM · VP9 (quality first)',
+  'mime.vp9': 'WebM · VP9 (best quality)',
   'mime.vp8': 'WebM · VP8 (alpha channel)',
   'mime.mp4': 'MP4 · H.264',
   'mime.webmDefault': 'WebM (default)',
@@ -292,7 +297,7 @@ export const en: Record<MsgKey, string> = {
   'err.unsupportedFile':
     'Unsupported file type: drop a Guitar Pro file (.gp/.gp3/.gp4/.gp5/.gpx) or a video file',
   'err.parseGp':
-    'Could not parse this file. Make sure it is a Guitar Pro format (.gp3 / .gp4 / .gp5 / .gpx / .gp)',
+    "Could not parse this file — make sure it's a Guitar Pro file (.gp3 / .gp4 / .gp5 / .gpx / .gp)",
   'err.canvasContext': 'Could not create a canvas context',
   'err.audioCapture': 'Audio capture unavailable — recording video only',
   'err.mimeUnsupported': 'This browser does not support the selected recording format: {err}',
@@ -301,7 +306,7 @@ export const en: Record<MsgKey, string> = {
   'err.renderEmpty': 'Tab rendering produced no output (partial 0)',
 
   // ---- 图片替代文本 ----
-  'img.mascot': 'Whale girl',
+  'img.mascot': 'Whale girl mascot',
 
   // ---- 内置示例曲（写入谱面内容） ----
   'demo.title': 'Demo · A minor pentatonic study',
@@ -315,12 +320,12 @@ export const en: Record<MsgKey, string> = {
   // ---- 页面标题与 SEO meta ----
   'meta.title': 'TabFlow · Dynamic guitar tab video generator',
   'meta.desc':
-    'Convert Guitar Pro scores into a single-line scrolling tab video, sync it with your performance video, and export with a white or transparent background.',
-  'meta.ogTitle': 'TabFlow · Turn Guitar Pro scores into scrolling tab videos',
+    'Convert Guitar Pro tabs into a single-line scrolling tab video, sync it with your performance video, and export with a white or transparent background.',
+  'meta.ogTitle': 'TabFlow · Turn Guitar Pro tabs into scrolling tab videos',
   'meta.ogDesc':
     'Upload a Guitar Pro file to generate a horizontally scrolling tab video, sync it with your performance video, and export with a white or transparent background ready to overlay in your editor. Fully client-side, no install, free and open source.',
   'meta.twitterDesc':
-    'Guitar Pro score → horizontally scrolling tab video, sync with your performance video, transparent background export.',
+    'Guitar Pro tab → horizontally scrolling tab video, sync with your performance video, transparent background export.',
 };
 
 export const messages: Record<Lang, Record<MsgKey, string>> = { zh, en };

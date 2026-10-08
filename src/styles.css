@@ -299,6 +299,20 @@ button {
   accent-color: var(--accent);
 }
 
+/* 反复 / 跳房子记号的播放提示（紧邻时间轴） */
+.repeat-hint {
+  display: inline-block;
+  align-self: flex-start;
+  margin: 0 4px 4px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-border);
+  color: var(--navy);
+  font-size: 11.5px;
+  line-height: 1.6;
+}
+
 /* ---------- 空状态 ---------- */
 .empty {
   flex: 1;
@@ -530,12 +544,6 @@ input[type='checkbox'] {
   color: var(--accent);
   background: var(--accent-soft);
   font-weight: 600;
-}
-
-.track-chip .badge {
-  font-size: 10.5px;
-  margin-left: 4px;
-  opacity: 0.75;
 }
 
 /* 分段选择 */

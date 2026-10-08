@@ -125,7 +125,10 @@ export default function App() {
   const stripRef = useRef<StripResult | null>(null);
   stripRef.current = strip;
 
-  const duration = hasVideo ? videoDuration || 0 : strip?.tempoMap.totalSec ?? 0;
+  const duration = hasVideo ? videoDuration || 0 : strip?.playback.totalSec ?? 0;
+
+  /** 谱面是否含反复 / 跳房子等记号（播放顺序不再是线性直读） */
+  const hasRepeats = strip?.playback.hasRepeats ?? false;
 
   /** 展示用文件名：上传文件用真实文件名，内置示例曲随语言实时切换 */
   const displayFileName = isDemo ? t('demo.fileName') : fileName;
@@ -618,6 +621,7 @@ export default function App() {
                 onChange={(e) => seekTo(parseFloat(e.target.value))}
               />
             </div>
+            {hasRepeats && <div className="repeat-hint">{t('playback.hint')}</div>}
           </div>
 
           <aside className="sidebar">
@@ -634,7 +638,6 @@ export default function App() {
                       title={t('track.tip', { name: tk.name, notes: tk.noteCount })}
                     >
                       {tk.name}
-                      {tk.isPerc && <span className="badge">{t('track.percBadge')}</span>}
                     </button>
                   ))}
                 </div>

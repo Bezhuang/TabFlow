@@ -9,6 +9,7 @@ import {
 const Color = model.Color;
 import bravuraWoff2 from '@coderline/alphatab/font/Bravura.woff2?url';
 import { TempoMap } from './tempo';
+import { buildPlaybackOrder, type PlaybackOrder } from './playback';
 import { t } from '../i18n/translate';
 
 // Bravura 音乐字体随构建产物一起发布
@@ -69,9 +70,11 @@ export interface StripResult {
   /** 逻辑总宽度（与 bounds 同单位） */
   width: number;
   height: number;
-  /** 秒 → 条带 x（绝对坐标） */
+  /** 秒 → 条带 x（绝对坐标，已按反复 / 跳房子 / D.C. 等记号跳转） */
   xOfTime: (t: number) => number;
   tempoMap: TempoMap;
+  /** 实际演奏顺序（反复等展开后的时间轴） */
+  playback: PlaybackOrder;
   barRanges: { x: number; w: number }[];
   beatRanges: { x: number; w: number }[];
 }
@@ -342,21 +345,32 @@ export async function renderStrip(score: model.Score, opts: StripOptions): Promi
   const samples: Sample[] = [];
   const barRanges: { x: number; w: number }[] = [];
   const beatRanges: { x: number; w: number }[] = [];
+  /** 每个小节内部的 tick 偏移 → x 采样（按小节下标索引，供反复跳转后就地插值） */
+  const barSamples: { off: number; x: number }[][] = new Array(score.masterBars.length);
   for (let i = 0; i < score.masterBars.length; i++) {
     const mb = score.masterBars[i];
     const mbb = getMasterBarBounds(i);
     if (!mbb) continue;
     samples.push({ tick: mb.start, x: mbb.realBounds.x });
     barRanges.push({ x: mbb.realBounds.x, w: mbb.realBounds.w });
+    const list: { off: number; x: number }[] = [{ off: 0, x: mbb.realBounds.x }];
     const barBounds = mbb.bars?.[0];
     if (barBounds?.beats) {
       const xs = barBounds.beats.map((bb) => bb.realBounds.x);
       for (let j = 0; j < barBounds.beats.length; j++) {
         const beat = barBounds.beats[j].beat;
-        samples.push({ tick: mb.start + (beat.playbackStart ?? 0), x: xs[j] });
+        const off = beat.playbackStart ?? 0;
+        samples.push({ tick: mb.start + off, x: xs[j] });
+        list.push({ off, x: xs[j] });
         beatRanges.push({ x: xs[j], w: (j + 1 < xs.length ? xs[j + 1] : xs[j] + 40) - xs[j] });
       }
     }
+    list.sort((a, b) => a.off - b.off);
+    const dedupedList: { off: number; x: number }[] = [];
+    for (const s of list) {
+      if (dedupedList.length === 0 || s.off - dedupedList[dedupedList.length - 1].off >= 1) dedupedList.push(s);
+    }
+    barSamples[i] = dedupedList;
   }
   samples.sort((a, b) => a.tick - b.tick);
   const deduped: Sample[] = [];
@@ -364,21 +378,44 @@ export async function renderStrip(score: model.Score, opts: StripOptions): Promi
     if (deduped.length === 0 || s.tick - deduped[deduped.length - 1].tick >= 1) deduped.push(s);
   }
 
+  // 个别小节可能没有布局 bounds（现有渲染结果里已被跳过）：用相邻小节补齐，
+  // 避免播放到这些小节时 x 落到 0 造成画面跳到最左端。
+  for (let i = 0; i < barSamples.length; i++) {
+    if (barSamples[i]?.length) continue;
+    const prev = i > 0 ? barSamples[i - 1] : undefined;
+    if (prev?.length) barSamples[i] = [{ off: 0, x: prev[prev.length - 1].x }];
+  }
+  for (let i = barSamples.length - 1; i >= 0; i--) {
+    if (barSamples[i]?.length) continue;
+    const next = i + 1 < barSamples.length ? barSamples[i + 1] : undefined;
+    if (next?.length) barSamples[i] = [{ off: 0, x: next[0].x }];
+  }
+
+  const playback = buildPlaybackOrder(score, tempoMap);
+
   const xOfTime = (t: number): number => {
-    if (deduped.length === 0) return 0;
-    const tick = tempoMap.secToTick(t);
-    if (tick <= deduped[0].tick) return deduped[0].x;
-    if (tick >= deduped[deduped.length - 1].tick) return deduped[deduped.length - 1].x;
+    if (playback.steps.length === 0) {
+      return deduped.length > 0 ? deduped[0].x : 0;
+    }
+    const { step, frac } = playback.stepAtSec(t);
+    const s = playback.steps[step];
+    const list = barSamples[s.barIndex];
+    if (!list || list.length === 0) return 0;
+    // 小节内按 tick 偏移插值
+    const off = frac * score.masterBars[s.barIndex].calculateDuration();
+    if (off <= list[0].off) return list[0].x;
+    const last = list[list.length - 1];
+    if (off >= last.off) return last.x;
     let lo = 0;
-    let hi = deduped.length - 1;
+    let hi = list.length - 1;
     while (lo < hi - 1) {
       const mid = (lo + hi) >> 1;
-      if (deduped[mid].tick <= tick) lo = mid;
+      if (list[mid].off <= off) lo = mid;
       else hi = mid;
     }
-    const a = deduped[lo];
-    const b = deduped[hi];
-    const f = (tick - a.tick) / Math.max(1, b.tick - a.tick);
+    const a = list[lo];
+    const b = list[hi];
+    const f = (off - a.off) / Math.max(1, b.off - a.off);
     return a.x + (b.x - a.x) * f;
   };
 
@@ -388,6 +425,7 @@ export async function renderStrip(score: model.Score, opts: StripOptions): Promi
     height: totalHeight,
     xOfTime,
     tempoMap,
+    playback,
     barRanges,
     beatRanges,
   };
